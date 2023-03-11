@@ -1,0 +1,300 @@
+import 'package:flutter/material.dart';
+import 'package:las_flores/UI/actualizar/actualizarProducto.dart';
+import 'package:mongo_dart/mongo_dart.dart' as M;
+import 'package:las_flores/bd/mongodb.dart';
+import 'package:las_flores/modelos/modelos.dart';
+
+class actualizarInventario extends StatefulWidget {
+  @override
+  _actualizarInventarioState createState() => _actualizarInventarioState();
+}
+
+class _actualizarInventarioState extends State<actualizarInventario> {
+  static const Actualizar = 1;
+  static const Crear = 0;
+  bool deshabilitar = false;
+  String? dropdownValue_producto;
+  TextEditingController nombreController = TextEditingController();
+  TextEditingController precioController = TextEditingController(text: "0");
+  TextEditingController camaraController = TextEditingController(text: "0");
+  TextEditingController reservaController = TextEditingController(text: "0");
+  TextEditingController totalController = TextEditingController(text: "0");
+  TextEditingController valorController = TextEditingController(text: "0");
+  List<producto> productos = [];
+  @override
+  Widget build(BuildContext context) {
+    var textWidget = "Añadir Existencia";
+    int operacion = Crear;
+    inventario? un_inventario;
+
+    if (ModalRoute.of(context)?.settings.arguments != null) {
+      try {
+        un_inventario =
+            ModalRoute.of(context)?.settings.arguments as inventario;
+
+        operacion = Actualizar;
+        nombreController.text = un_inventario.nombre_producto;
+        precioController.text = un_inventario.precio;
+        camaraController.text = un_inventario.camara;
+        reservaController.text = un_inventario.reserva;
+        totalController.text = un_inventario.total;
+        valorController.text = un_inventario.valor;
+
+        textWidget = "Actualizar!";
+      } catch (e) {
+        //check.clear();
+        //check = ModalRoute.of(context)?.settings.arguments as List<String>;
+      }
+    }
+
+    return Scaffold(
+        appBar: AppBar(
+          title: Text(textWidget),
+        ),
+        body: Stack(children: [
+          SingleChildScrollView(
+            child: Column(children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Expanded(
+                    child: Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 20, 10, 20),
+                            child: Text(
+                              "Productos",
+                              style: Theme.of(context).textTheme.headline6,
+                            ))),
+                  ),
+                  Expanded(
+                      flex: 2,
+                      child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                          child: FutureBuilder(
+                              future: mdb.getProductosExistentes(),
+                              builder: (BuildContext context,
+                                  AsyncSnapshot snapshot) {
+                                if (un_inventario != null) {
+                                  deshabilitar = false;
+
+                                  return Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: TextField(
+                                        controller: nombreController,
+                                        readOnly: true,
+                                      ));
+                                } else {
+                                  String s = "";
+                                  try {
+                                    s = snapshot.requireData.toString();
+                                  } catch (e) {}
+                                  if (!(snapshot.hasData) ||
+                                      (s.contains("[]"))) {
+                                    deshabilitar = true;
+                                    return Align(
+                                        alignment: Alignment.bottomCenter,
+                                        child: Column(children: [
+                                          Text(
+                                              "No hay productos sin inventariar actualmente"),
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                16, 0, 16, 4),
+                                            child: ElevatedButton(
+                                                child: Text("Volver"),
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                }),
+                                          )
+                                        ]));
+                                  } else {
+                                    deshabilitar = false;
+                                    return snapshot.hasData
+                                        ? Container(
+                                            width: 1000,
+                                            child: DropdownButton<String>(
+                                              hint: Text(
+                                                  dropdownValue_producto ??
+                                                      'Seleccionar Producto'),
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  dropdownValue_producto =
+                                                      value;
+                                                  nombreController.text =
+                                                      dropdownValue_producto!;
+                                                });
+                                              },
+                                              value: dropdownValue_producto,
+                                              items: snapshot.data.map<
+                                                      DropdownMenuItem<String>>(
+                                                  (item) {
+                                                var prod =
+                                                    producto.fromMap(item);
+                                                productos.add(prod);
+                                                nombreController.text =
+                                                    prod.nombre;
+                                                return DropdownMenuItem<String>(
+                                                  value: prod.nombre,
+                                                  child: Text(prod.nombre!),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          )
+                                        : Container(
+                                            child: Center(
+                                              child: Text('Cargando...'),
+                                            ),
+                                          );
+                                  }
+                                }
+                              })))
+                ],
+              ),
+              Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: precioController,
+                    readOnly: deshabilitar,
+                    decoration:
+                        InputDecoration(labelText: "Precio de Venta (\$)"),
+                    onChanged: (String value) async {
+                      try {
+                        var s = double.parse(value) * 2;
+                        _calcularValores();
+                        return;
+                      } catch (e) {}
+                    },
+                  )),
+              Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: camaraController,
+                    readOnly: deshabilitar,
+                    decoration:
+                        InputDecoration(labelText: "Existencia en Camara"),
+                    onChanged: (String value) async {
+                      try {
+                        var s = int.parse(value) * 2;
+                        _calcularValores();
+                        return;
+                      } catch (e) {}
+                    },
+                  )),
+              Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: reservaController,
+                    readOnly: deshabilitar,
+                    decoration:
+                        InputDecoration(labelText: "Existencia en Reserva"),
+                    onChanged: (String value) async {
+                      try {
+                        var s = int.parse(value) * 2;
+                        _calcularValores();
+                        return;
+                      } catch (e) {}
+                    },
+                  )),
+              Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: totalController,
+                    decoration: InputDecoration(labelText: "Existencia Total"),
+                    readOnly: true,
+                  )),
+              Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: valorController,
+                    decoration: InputDecoration(labelText: "Valor Total"),
+                    readOnly: true,
+                  )),
+            ]),
+          ),
+          Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: ElevatedButton(
+                    child: Text(textWidget),
+                    onPressed: () {
+                      if (operacion == Actualizar) {
+                        _actualizarInventario(un_inventario!);
+                      } else {
+                        _insertarInventario();
+                      }
+                      Navigator.pop(context);
+                    }),
+              ))
+        ]));
+  }
+
+  _calcularValores() {
+    if (precioController.text == "") {
+      precioController.text = "0";
+    }
+    if (camaraController.text == "") {
+      precioController.text = "0";
+    }
+    if (reservaController.text == "") {
+      precioController.text = "0";
+    }
+
+    var pre = double.parse(precioController.text);
+    var cam = int.parse(camaraController.text);
+    var res = int.parse(reservaController.text);
+    var tot = (cam + res);
+    // ignore: await_only_futures
+    totalController.text = tot.toString();
+    valorController.text = (tot * pre).toString();
+    //setState(() {});
+  }
+
+  _insertarInventario() async {
+    if (deshabilitar == true) {
+    } else {
+      final un_inventario = inventario(
+          id_inventario: M.ObjectId(),
+          nombre_producto: nombreController.text,
+          precio: precioController.text,
+          camara: camaraController.text,
+          reserva: reservaController.text,
+          total: totalController.text,
+          valor: valorController.text);
+      await mdb.insertarInventario(un_inventario);
+
+      var prod = productos
+          .where((element) => element.nombre == un_inventario.nombre_producto)
+          .first;
+      final p = producto(
+          id_producto: prod.id_producto,
+          nombre: prod.nombre,
+          inventariado: true.toString());
+      await mdb.actualizarProducto(p);
+      dispose();
+    }
+  }
+
+  _actualizarInventario(inventario un_inventario) async {
+    final un_i = inventario(
+        id_inventario: un_inventario.id_inventario,
+        nombre_producto: nombreController.text,
+        precio: precioController.text,
+        camara: camaraController.text,
+        reserva: reservaController.text,
+        total: totalController.text,
+        valor: valorController.text);
+    await mdb.actualizarInventario(un_i);
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    nombreController.dispose();
+    precioController.dispose();
+    camaraController.dispose();
+    reservaController.dispose();
+    totalController.dispose();
+    valorController.dispose();
+  }
+}
